@@ -44,19 +44,36 @@ export const OnePageSystem9: React.FC<OnePageSystem9Props> = ({
   let dateFiltered = data.system9;
   const normSelectedMonth = normalizeThaiMonth(selectedMonth);
 
+  // Strictly by entry date (ว/ด/ป): a period with no project shows "no project" instead of every project
   if (selectedDate !== 'all') {
     const norm = normalizeDate(selectedDate);
-    const matched = data.system9.filter((r) => normalizeDate(r.date) === norm);
-    if (matched.length > 0) dateFiltered = matched;
+    dateFiltered = data.system9.filter((r) => normalizeDate(r.date) === norm);
   } else if (normSelectedMonth !== 'all' && normSelectedMonth !== '') {
-    const matched = data.system9.filter(
-      (r) => normalizeThaiMonth(getMonthFromDate(r.date) || '') === normSelectedMonth
+    dateFiltered = data.system9.filter(
+      (r) => normalizeThaiMonth(r.month || getMonthFromDate(r.date) || '') === normSelectedMonth
     );
-    if (matched.length > 0) dateFiltered = matched;
   }
 
+  const EMPTY_PROJ: System9Row = {
+    date: '',
+    bestPractice: '',
+    priority: '',
+    customerGroup: '',
+    projectName: 'ไม่มีโครงการที่ลงข้อมูลในช่วงนี้',
+    activity: '',
+    target: '',
+    resultM1: '',
+    resultM2: '',
+    resultM3: '',
+    resultM4: '',
+    resultM5: '',
+    wiDocNumber: '',
+    wiTitle: '',
+    responsible: '',
+  };
+
   const [selectedProjIdx, setSelectedProjIdx] = useState<number>(0);
-  const activeProj: System9Row = dateFiltered[selectedProjIdx] || dateFiltered[0] || data.system9[0];
+  const activeProj: System9Row = dateFiltered[selectedProjIdx] || dateFiltered[0] || EMPTY_PROJ;
   const [copied, setCopied] = useState<boolean>(false);
 
   // Interactive 6-step workflow checklist
@@ -280,7 +297,7 @@ ${activeProj.activity}
             <span className="text-xs text-white font-semibold flex items-center gap-1">
               <span>🚚 โครงการ Best Practice</span>
             </span>
-            <div className="text-2xl font-black text-white font-mono mt-1.5">{data.system9.length} โครงการ</div>
+            <div className="text-2xl font-black text-white font-mono mt-1.5">{dateFiltered.length} โครงการ</div>
             <div className="text-[10.5px] text-slate-400 mt-0.5">ขึ้นทะเบียนคู่มือคุณภาพ</div>
           </div>
         </div>

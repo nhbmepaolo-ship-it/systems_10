@@ -89,13 +89,14 @@ export const OnePageAllSystems: React.FC<OnePageAllSystemsProps> = ({
     sys9List = sys9List.filter((r) => normalizeDate(r.date) === targetNorm);
     const m = getMonthFromDate(selectedDate);
     if (m) {
-      sys8List = sys8List.filter((r) => r.month === m);
+      sys8List = sys8List.filter((r) => normalizeThaiMonth(r.month) === normalizeThaiMonth(m));
     }
   } else if (selectedMonth !== 'all' && selectedMonth !== '') {
     const normM = normalizeThaiMonth(selectedMonth);
     sys2List = sys2List.filter((r) => normalizeThaiMonth(r.month) === normM);
     sys5List = sys5List.filter((r) => normalizeThaiMonth(r.month) === normM);
     sys8List = sys8List.filter((r) => normalizeThaiMonth(r.month) === normM);
+    sys9List = sys9List.filter((r) => normalizeThaiMonth(r.month || getMonthFromDate(r.date) || '') === normM);
   }
 
   // Apply interactive filter mode

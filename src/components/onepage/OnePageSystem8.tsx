@@ -41,27 +41,45 @@ export const OnePageSystem8: React.FC<OnePageSystem8Props> = ({
   onMonthChange,
   onDateChange,
 }) => {
-  let dateFiltered = data.system8;
+  // Each of the 3 activity blocks has its own "วันที่" (month) column in the sheet,
+  // so every block is filtered by the date its activity was entered.
   const normSelectedMonth = normalizeThaiMonth(selectedMonth);
+  const periodMonth =
+    selectedDate !== 'all' ? normalizeThaiMonth(getMonthFromDate(selectedDate) || '') : normSelectedMonth;
+  const inPeriod = (m?: string) =>
+    !periodMonth || periodMonth === 'all' || normalizeThaiMonth(m || '') === periodMonth;
 
-  if (selectedDate !== 'all') {
-    const normDate = normalizeDate(selectedDate);
-    const matched = data.system8.filter(
-      (r) => normalizeDate(r.devDate) === normDate || normalizeDate(r.cultureDate) === normDate
-    );
-    if (matched.length > 0) {
-      dateFiltered = matched;
-    } else {
-      const m = getMonthFromDate(selectedDate);
-      if (m) {
-        dateFiltered = data.system8.filter((r) => normalizeThaiMonth(r.month) === normalizeThaiMonth(m));
-      }
-    }
-  } else if (normSelectedMonth !== 'all' && normSelectedMonth !== '') {
-    dateFiltered = data.system8.filter((r) => normalizeThaiMonth(r.month) === normSelectedMonth);
-  }
+  const engRows = data.system8.filter((r) => r.engActivity && inPeriod(r.month));
+  const devRows = data.system8.filter((r) => r.devActivity && inPeriod(r.devMonth || r.devDate));
+  const cultureRows = data.system8.filter((r) => r.cultureActivity && inPeriod(r.cultureMonth || r.cultureDate));
+  const dateFiltered = engRows;
 
-  const activeRecord: System8Row = dateFiltered[0] || data.system8[0];
+  const EMPTY_ROW: System8Row = {
+    month: '', engActivity: '', engJoined: 0, engNotJoined: 0, engGoodPct: 0, engFairPct: 0, engPoorPct: 0,
+    engTotalPct: 0, engResponsible: '', devDate: '', devActivity: '', devJoined: 0, devNotJoined: 0,
+    devIs10Sys: false, devIsHappy: false, devIsAOP: false, devGoodPct: 0, devTotalPct: 0, devResponsible: '',
+    cultureDate: '', cultureActivity: '', cultureJoined: 0, cultureNotJoined: 0, culturePHQ: false,
+    cultureWeBeforeMe: false, cultureVPC: false, cultureSafety: false, cultureGoodPct: 0, cultureTotalPct: 0,
+    cultureResponsible: '',
+  };
+  // Latest activity entered in the period for each block
+  const engRec = engRows[engRows.length - 1] || EMPTY_ROW;
+  const devRec = devRows[devRows.length - 1] || EMPTY_ROW;
+  const cultureRec = cultureRows[cultureRows.length - 1] || EMPTY_ROW;
+  const activeRecord: System8Row = engRec;
+
+  const avgPct = (vals: number[]) => {
+    const v = vals.filter((x) => x > 0);
+    return v.length ? `${Math.round(v.reduce((a, b) => a + b, 0) / v.length)}%` : '—';
+  };
+  const sumJoin = (rows: System8Row[], j: keyof System8Row, n: keyof System8Row) => {
+    const joined = rows.reduce((a, r) => a + (Number(r[j]) || 0), 0);
+    const all = rows.reduce((a, r) => a + (Number(r[j]) || 0) + (Number(r[n]) || 0), 0);
+    return all ? `${joined} / ${all} คน` : '—';
+  };
+  const activityList = (rows: System8Row[], pick: (r: System8Row) => string) =>
+    Array.from(new Set(rows.map(pick).filter(Boolean))).join(' · ');
+  const NO_ACTIVITY = 'ไม่มีกิจกรรมที่ลงข้อมูลในช่วงนี้';
 
   const [activeDimension, setActiveDimension] = useState<'all' | 'eng' | 'dev' | 'culture'>('all');
   const [copied, setCopied] = useState<boolean>(false);
@@ -69,11 +87,10 @@ export const OnePageSystem8: React.FC<OnePageSystem8Props> = ({
 
   const totalJoined = dateFiltered.reduce((a, b) => a + b.engJoined, 0);
   const totalTarget = dateFiltered.reduce((a, b) => a + b.engJoined + b.engNotJoined, 0);
-  const participationRate = totalTarget > 0 ? Math.round((totalJoined / totalTarget) * 100) : 92.3;
+  const participationRate = totalTarget > 0 ? Math.round((totalJoined / totalTarget) * 100) : 0;
 
-  const avgGoodPct = dateFiltered.length
-    ? Math.round(dateFiltered.reduce((a, b) => a + (b.engGoodPct || 92), 0) / dateFiltered.length)
-    : 92;
+  const goodVals = dateFiltered.map((b) => b.engGoodPct).filter((x) => x > 0);
+  const avgGoodPct = goodVals.length ? Math.round(goodVals.reduce((a, b) => a + b, 0) / goodVals.length) : 0;
 
   const handlePrint = () => {
     window.print();
@@ -93,10 +110,10 @@ export const OnePageSystem8: React.FC<OnePageSystem8Props> = ({
 🗓️ รอบเดือน: ${selectedMonth === 'all' ? 'ทุกช่วงเวลาสะสม' : selectedMonth}
 👥 อัตราเข้าร่วมกิจกรรมรวม: ${participationRate}%
 🌟 ความพึงพอใจดีเยี่ยม: ${avgGoodPct}%
-🤝 กิจกรรมความผูกพัน: ${activeRecord.engActivity} (เข้าร่วม 12/13 คน)
-🚀 การพัฒนาขีดความสามารถ: ${activeRecord.devActivity} (ระดับดี 100%)
-🛡️ วัฒนธรรมความปลอดภัย: ค่านิยม "We Before Me" ให้เกียรติและยึดความปลอดภัยเป็นหลัก (100%)
-👤 ผู้รับผิดชอบ: ชาลี (ความผูกพัน) / สุพัตรา (พัฒนาคน)`;
+🤝 กิจกรรมความผูกพัน: ${engRec.engActivity || '-'} (เข้าร่วม ${sumJoin(engRows, 'engJoined', 'engNotJoined')})
+🚀 การพัฒนาขีดความสามารถ: ${devRec.devActivity || '-'} (ระดับดี ${avgPct(devRows.map((r) => r.devGoodPct))})
+🛡️ วัฒนธรรมความปลอดภัย: ${cultureRec.cultureActivity || '-'} (${avgPct(cultureRows.map((r) => r.cultureGoodPct))})
+👤 ผู้รับผิดชอบ: ${engRec.engResponsible || '-'} (ความผูกพัน) / ${devRec.devResponsible || '-'} (พัฒนาคน)`;
 
     navigator.clipboard.writeText(text);
     setCopied(true);
@@ -301,7 +318,10 @@ export const OnePageSystem8: React.FC<OnePageSystem8Props> = ({
                   <span className="text-base">💖</span>
                   <span>1. มิติการสร้างความผูกพัน (Engagement)</span>
                 </div>
-                <h4 className="text-base font-extrabold text-white mb-2">{activeRecord.engActivity || 'BME Family'}</h4>
+                <h4 className="text-base font-extrabold text-white mb-2">{engRec.engActivity || NO_ACTIVITY}</h4>
+                {engRows.length > 1 && (
+                  <p className="text-[10.5px] text-purple-300 mb-2">กิจกรรมในช่วงนี้ ({engRows.length}): {activityList(engRows, (r) => r.engActivity)}</p>
+                )}
                 <p className="text-xs text-slate-300 leading-relaxed mb-3">
                   กิจกรรมสัมพันธ์ในครอบครัว BME และการทำ 1:1 Coaching พูดคุยเสริมพลังใจ เพื่อสร้างความร่วมมือและความสุขในการทำงาน
                 </p>
@@ -309,18 +329,18 @@ export const OnePageSystem8: React.FC<OnePageSystem8Props> = ({
                   <div className="flex justify-between">
                     <span className="text-slate-400">สัดส่วนเข้าร่วม:</span>
                     <span className="font-mono font-bold text-white">
-                      {activeRecord.engJoined} / {activeRecord.engJoined + activeRecord.engNotJoined} คน
+                      {sumJoin(engRows, 'engJoined', 'engNotJoined')}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">ระดับดีเยี่ยม:</span>
-                    <span className="font-mono font-bold text-emerald-400">{activeRecord.engGoodPct || 92}%</span>
+                    <span className="font-mono font-bold text-emerald-400">{avgPct(engRows.map((r) => r.engGoodPct))}</span>
                   </div>
                 </div>
               </div>
               <div className="mt-4 pt-2.5 border-t border-slate-800/80 text-[11px] text-slate-400 flex justify-between">
-                <span>ผู้รับผิดชอบ: {activeRecord.engResponsible || 'ชาลี'}</span>
-                <span className="text-purple-400 font-semibold">สำเร็จ 92%</span>
+                <span>ผู้รับผิดชอบ: {engRec.engResponsible || '—'}</span>
+                <span className="text-purple-400 font-semibold">Total {avgPct(engRows.map((r) => r.engTotalPct))}</span>
               </div>
             </div>
           )}
@@ -334,8 +354,11 @@ export const OnePageSystem8: React.FC<OnePageSystem8Props> = ({
                   <span>2. มิติการพัฒนาขีดความสามารถ (Capacity)</span>
                 </div>
                 <h4 className="text-base font-extrabold text-white mb-2">
-                  {activeRecord.devActivity || 'Up Skill จากจุดเด่น จุดด้อย'}
+                  {devRec.devActivity || NO_ACTIVITY}
                 </h4>
+                {devRows.length > 1 && (
+                  <p className="text-[10.5px] text-blue-300 mb-2">กิจกรรมในช่วงนี้ ({devRows.length}): {activityList(devRows, (r) => r.devActivity)}</p>
+                )}
                 <p className="text-xs text-slate-300 leading-relaxed mb-3">
                   พัฒนาศักยภาพเชิงเทคนิค ขับเคลื่อน 10 ระบบงาน, Happy Series และแผนปฏิบัติการ AOP เพื่อความเชี่ยวชาญสูงสุดในการบำรุงรักษา
                 </p>
@@ -343,18 +366,18 @@ export const OnePageSystem8: React.FC<OnePageSystem8Props> = ({
                   <div className="flex justify-between">
                     <span className="text-slate-400">สัดส่วนเข้าร่วม:</span>
                     <span className="font-mono font-bold text-white">
-                      {activeRecord.devJoined} / {activeRecord.devJoined + activeRecord.devNotJoined} คน
+                      {sumJoin(devRows, 'devJoined', 'devNotJoined')}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">ระดับประเมินดี:</span>
-                    <span className="font-mono font-bold text-emerald-400">{activeRecord.devGoodPct || 100}%</span>
+                    <span className="font-mono font-bold text-emerald-400">{avgPct(devRows.map((r) => r.devGoodPct))}</span>
                   </div>
                 </div>
               </div>
               <div className="mt-4 pt-2.5 border-t border-slate-800/80 text-[11px] text-slate-400 flex justify-between">
-                <span>ผู้รับผิดชอบ: {activeRecord.devResponsible || 'สุพัตรา'}</span>
-                <span className="text-blue-400 font-semibold">สำเร็จ 100%</span>
+                <span>ผู้รับผิดชอบ: {devRec.devResponsible || '—'}</span>
+                <span className="text-blue-400 font-semibold">Total {avgPct(devRows.map((r) => r.devTotalPct))}</span>
               </div>
             </div>
           )}
@@ -368,8 +391,11 @@ export const OnePageSystem8: React.FC<OnePageSystem8Props> = ({
                   <span>3. วัฒนธรรมความปลอดภัย (Safety Culture)</span>
                 </div>
                 <h4 className="text-base font-extrabold text-white mb-2">
-                  {activeRecord.cultureActivity || 'We Before Me'}
+                  {cultureRec.cultureActivity || NO_ACTIVITY}
                 </h4>
+                {cultureRows.length > 1 && (
+                  <p className="text-[10.5px] text-emerald-300 mb-2">กิจกรรมในช่วงนี้ ({cultureRows.length}): {activityList(cultureRows, (r) => r.cultureActivity)}</p>
+                )}
                 <p className="text-xs text-slate-300 leading-relaxed mb-3">
                   เจ้าหน้าที่ปฏิบัติตนตามหลัก "We Before Me" ให้เกียรติและเห็นแก่ความปลอดภัยสูงสุดของอุปกรณ์ มีความสามัคคีร่วมใจในการบริการ
                 </p>
@@ -377,18 +403,18 @@ export const OnePageSystem8: React.FC<OnePageSystem8Props> = ({
                   <div className="flex justify-between">
                     <span className="text-slate-400">สัดส่วนเข้าร่วม:</span>
                     <span className="font-mono font-bold text-white">
-                      {activeRecord.cultureJoined} / {activeRecord.cultureJoined + activeRecord.cultureNotJoined} คน
+                      {sumJoin(cultureRows, 'cultureJoined', 'cultureNotJoined')}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">ระดับยอมรับค่านิยม:</span>
-                    <span className="font-mono font-bold text-emerald-400">{activeRecord.cultureGoodPct || 100}%</span>
+                    <span className="font-mono font-bold text-emerald-400">{avgPct(cultureRows.map((r) => r.cultureGoodPct))}</span>
                   </div>
                 </div>
               </div>
               <div className="mt-4 pt-2.5 border-t border-slate-800/80 text-[11px] text-slate-400 flex justify-between">
-                <span>ผู้รับผิดชอบ: {activeRecord.cultureResponsible || 'สุพัตรา'}</span>
-                <span className="text-emerald-400 font-semibold">ผ่านเกณฑ์ 100%</span>
+                <span>ผู้รับผิดชอบ: {cultureRec.cultureResponsible || '—'}</span>
+                <span className="text-emerald-400 font-semibold">Total {avgPct(cultureRows.map((r) => r.cultureTotalPct))}</span>
               </div>
             </div>
           )}
@@ -406,7 +432,7 @@ export const OnePageSystem8: React.FC<OnePageSystem8Props> = ({
           <div className="flex items-center gap-4 font-mono">
             <div>
               <span className="text-[10px] text-slate-400 block">ผู้ประสานงานหลัก:</span>
-              <span className="font-bold text-white">{activeRecord.engResponsible} / {activeRecord.devResponsible}</span>
+              <span className="font-bold text-white">{engRec.engResponsible || '—'} / {devRec.devResponsible || '—'}</span>
             </div>
             <div className="text-right">
               <span className="text-[10px] text-slate-400 block">ดัชนีความสุข:</span>
