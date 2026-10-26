@@ -33,7 +33,18 @@
 @media print {
   @page {
     size: A4 portrait;
-    margin: 8mm;
+    margin: 6mm;
+  }
+
+  html, body {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  * {
+    print-color-adjust: exact !important;
+    -webkit-print-color-adjust: exact !important;
   }
   
   body {
@@ -68,4 +79,49 @@
     background-color: #f8fafc !important;
     color: #0f172a !important;
   }
+}
+
+/* One-A4 fit mode (set by src/printFit.ts during printing) */
+html.pf-printing,
+html.pf-printing body,
+html.pf-printing .pf-ancestor {
+  background: #ffffff !important;
+}
+html.pf-printing body {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+html.pf-printing .pf-ancestor {
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-width: none !important;
+  width: auto !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+html.pf-printing .pf-target {
+  padding: 0 !important;
+  box-shadow: none !important;
+  break-inside: avoid;
+  page-break-inside: avoid;
+  page-break-after: avoid;
+}
+
+/* Items trimmed from the printout (kept in sync for measuring and printing) */
+.pf-print-show { display: none; }
+html.pf-printing .pf-print-hide { display: none !important; }
+html.pf-printing .pf-print-show { display: block !important; }
+@media print {
+  .pf-print-hide { display: none !important; }
+  .pf-print-show { display: block !important; }
+}
+html.pf-printing .pf-target,
+html.pf-printing .pf-target *,
+html.pf-printing .pf-ancestor {
+  transition: none !important;
+  animation: none !important;
 }
