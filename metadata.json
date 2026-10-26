@@ -1,0 +1,7 @@
+{
+  "name": "BME Executive One-Page Dashboard",
+  "description": "แดชบอร์ดสรุปผลแบบเรียลไทม์ One-Page หรูหราทันสมัย ซิงค์ข้อมูล Google Sheet อัตโนมัติ (ระบบที่ 2, 5, 8, 9) พร้อมกราฟิกเชิงโต้ตอบและการวิเคราะห์เชิงทำนาย",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
