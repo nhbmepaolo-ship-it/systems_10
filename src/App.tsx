@@ -8,6 +8,7 @@ import { SystemComparisonView } from './components/SystemComparisonView';
 import { PredictiveAnalyticsView } from './components/PredictiveAnalyticsView';
 import { DataExplorerView } from './components/DataExplorerView';
 import { DashboardDataset } from './types/dashboard';
+import { buildDataset } from './sheetsData';
 import { RefreshCw, AlertCircle, Sparkles } from 'lucide-react';
 
 export default function App() {
@@ -34,12 +35,19 @@ export default function App() {
     }
 
     try {
-      const url = `/api/sheets/summary${isManual ? '?force=true' : ''}`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      let json: DashboardDataset;
+      try {
+        const url = `/api/sheets/summary${isManual ? '?force=true' : ''}`;
+        const res = await fetch(url);
+        const isJson = (res.headers.get('content-type') || '').includes('application/json');
+        if (!res.ok || !isJson) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        json = await res.json();
+      } catch {
+        // No backend (static hosting) -> read Google Sheet directly from the browser
+        json = { ...(await buildDataset()), isCached: false, cacheAgeSec: 0 } as unknown as DashboardDataset;
       }
-      const json: DashboardDataset = await res.json();
       setData(json);
       setError(null);
       if (isManual) {
