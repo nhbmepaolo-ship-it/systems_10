@@ -1,6 +1,29 @@
 // Client-side Google Sheets loader (works on static hosting: GitHub Pages / Vercel / Netlify)
 // Logic mirrored from server.ts so the dashboard does not need the Express API.
 export const SPREADSHEET_ID = '1ya9jpaJzy_S8--d6fw3IScS2PS-acdE06J5ySBbdpNA';
+const NUM_MONTH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+
+// "2/3/2026" -> "02/03/2026" (DD/MM/YYYY as entered in the sheet)
+function cleanDate(raw: string | undefined): string {
+  const t = (raw || '').trim();
+  const p = t.split('/');
+  if (p.length === 3 && /^\d+$/.test(p[0]) && /^\d+$/.test(p[1])) {
+    return `${p[0].padStart(2, '0')}/${p[1].padStart(2, '0')}/${p[2].trim()}`;
+  }
+  return t;
+}
+
+// The month a record belongs to is taken from the date it was entered (วันที่ลงข้อมูล).
+// Only when a row has no valid date do we fall back to the written month column.
+function monthOfEntry(dateRaw: string | undefined, monthRaw?: string): string {
+  const p = cleanDate(dateRaw).split('/');
+  if (p.length === 3) {
+    const m = parseInt(p[1], 10);
+    if (m >= 1 && m <= 12) return NUM_MONTH[m - 1];
+  }
+  return normalizeThaiMonth(monthRaw ?? dateRaw);
+}
+
 export const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyAisruIQIh_9AW8NNhnwd30oiED3qTPGyd6p0DnpvAMLx5jQS8Fl0xEe9L30i5o0T_/exec';
 
 // Robust CSV Line Parser supporting multiline & quotes
@@ -135,8 +158,8 @@ export async function buildDataset() {
   const system2 = (rawSys2.slice(1) || [])
     .filter((r) => r.length > 1 && (r[0] || r[1]))
     .map((r) => {
-      const month = normalizeThaiMonth(r[0]);
-      const date = r[1] || '';
+      const date = cleanDate(r[1]);
+      const month = monthOfEntry(r[1], r[0]);
       const time = r[2] || '';
       const isUrgent = (r[3] || '').toUpperCase() === 'TRUE' || (r[3] || '').includes('เร่งด่วน') || (r[3] || '').includes('/');
       const isInfo = (r[4] || '').toUpperCase() === 'TRUE' || (r[4] || '').includes('/');
@@ -196,8 +219,8 @@ export async function buildDataset() {
   const system5 = (rawSys5.slice(1) || [])
     .filter((r) => r.length > 3 && (r[0] || r[1] || r[11]))
     .map((r) => {
-      const month = normalizeThaiMonth(r[0]);
-      const date = r[1] || '';
+      const date = cleanDate(r[1]);
+      const month = monthOfEntry(r[1], r[0]);
       const time = r[2] || '';
       const department = r[3] || 'BME';
       const channelRound = (r[4] || '').includes('/') || (r[4] || '').toUpperCase() === 'TRUE';
@@ -268,7 +291,7 @@ export async function buildDataset() {
     .filter((r) => r.length > 1 && (r[0] || r[1] || r[12] || r[26]))
     .map((r) => {
       return {
-        month: r[0] || 'มีนาคม',
+        month: monthOfEntry(r[0]),
         engActivity: r[1] || '',
         engJoined: parseInt(r[3] || '0', 10) || 0,
         engNotJoined: parseInt(r[4] || '0', 10) || 0,
@@ -279,6 +302,7 @@ export async function buildDataset() {
         engResponsible: r[9] || 'ชาลี',
 
         devDate: r[11] || '',
+        devMonth: monthOfEntry(r[11]),
         devActivity: r[12] || '',
         devJoined: parseInt(r[14] || '0', 10) || 0,
         devNotJoined: parseInt(r[15] || '0', 10) || 0,
@@ -290,6 +314,7 @@ export async function buildDataset() {
         devResponsible: r[23] || 'สุพัตรา',
 
         cultureDate: r[25] || '',
+        cultureMonth: monthOfEntry(r[25]),
         cultureActivity: r[26] || '',
         cultureJoined: parseInt(r[28] || '0', 10) || 0,
         cultureNotJoined: parseInt(r[29] || '0', 10) || 0,
@@ -308,7 +333,8 @@ export async function buildDataset() {
     .filter((r) => r.length > 3 && (r[0] || r[4]))
     .map((r) => {
       return {
-        date: r[0] || '',
+        date: cleanDate(r[0]),
+        month: monthOfEntry(r[0]),
         bestPractice: r[1] || '',
         priority: r[2] || '',
         customerGroup: r[3] || '',
@@ -330,7 +356,12 @@ export async function buildDataset() {
   const monthSet = new Set<string>();
   system2.forEach((r) => r.month && monthSet.add(r.month));
   system5.forEach((r) => r.month && monthSet.add(r.month));
-  system8.forEach((r) => r.month && monthSet.add(r.month));
+  system8.forEach((r) => {
+    if (r.engActivity && r.month) monthSet.add(r.month);
+    if (r.devActivity && r.devMonth) monthSet.add(r.devMonth);
+    if (r.cultureActivity && r.cultureMonth) monthSet.add(r.cultureMonth);
+  });
+  system9.forEach((r) => r.month && monthSet.add(r.month));
   const monthsAvailable = sortThaiMonths(Array.from(monthSet));
 
   // Compute System 2 Metrics
