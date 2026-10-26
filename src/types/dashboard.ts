@@ -58,7 +58,9 @@ export interface System5Row {
 }
 
 export interface System8Row {
-  month: string;
+  month: string; // month of the engagement activity (from its "วันที่" column)
+  devMonth?: string; // month of the competency activity
+  cultureMonth?: string; // month of the culture activity
   // Dimension 1: Engagement
   engActivity: string;
   engJoined: number;
@@ -97,6 +99,7 @@ export interface System8Row {
 
 export interface System9Row {
   date: string;
+  month?: string; // derived from the entry date
   bestPractice: string;
   priority: string;
   customerGroup: string;
