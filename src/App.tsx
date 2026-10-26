@@ -35,19 +35,9 @@ export default function App() {
     }
 
     try {
-      let json: DashboardDataset;
-      try {
-        const url = `/api/sheets/summary${isManual ? '?force=true' : ''}`;
-        const res = await fetch(url);
-        const isJson = (res.headers.get('content-type') || '').includes('application/json');
-        if (!res.ok || !isJson) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        json = await res.json();
-      } catch {
-        // No backend (static hosting) -> read Google Sheet directly from the browser
-        json = { ...(await buildDataset()), isCached: false, cacheAgeSec: 0 } as unknown as DashboardDataset;
-      }
+      // Read Google Sheet directly from the browser (works on Vercel / static hosting,
+      // no /api backend needed — avoids 404 errors in the console)
+      const json = { ...(await buildDataset()), isCached: false, cacheAgeSec: 0 } as unknown as DashboardDataset;
       setData(json);
       setError(null);
       if (isManual) {
@@ -103,12 +93,7 @@ export default function App() {
 
   const handleManualSync = async () => {
     setIsSyncing(true);
-    try {
-      await fetch('/api/sheets/sync', { method: 'POST' });
-      await fetchData(true);
-    } catch {
-      await fetchData(true);
-    }
+    await fetchData(true);
   };
 
   // Loading Screen
