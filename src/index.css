@@ -125,3 +125,15 @@ html.pf-printing .pf-ancestor {
   transition: none !important;
   animation: none !important;
 }
+
+/* Scrollable lists are shown in full when printing / exporting */
+html.pf-printing .pf-unclip {
+  max-height: none !important;
+  overflow: visible !important;
+}
+@media print {
+  .pf-unclip {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}
