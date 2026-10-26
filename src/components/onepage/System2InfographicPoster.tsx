@@ -1003,7 +1003,7 @@ ${task.content}
                 return (
                   <div
                     key={idx}
-                    className="bg-slate-950 rounded-xl p-4 border border-slate-800 hover:border-blue-500/50 transition shadow-sm space-y-3"
+                    className={`bg-slate-950 rounded-xl p-4 border border-slate-800 hover:border-blue-500/50 transition shadow-sm space-y-3 ${idx >= 4 ? 'pf-print-hide' : ''}`}
                   >
                     {/* Top Row: Meta & Badges */}
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
@@ -1106,6 +1106,11 @@ ${task.content}
                   </div>
                 );
               })}
+              {displayedTasks.length > 4 && (
+                <p className="pf-print-show text-[11px] text-slate-400 text-center">
+                  … และอีก {displayedTasks.length - 4} รายการ (ดูทั้งหมดได้บนแดชบอร์ด)
+                </p>
+              )}
             </div>
           )}
         </div>
