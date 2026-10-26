@@ -214,6 +214,36 @@ export const System5InfographicPoster: React.FC<System5InfographicPosterProps> =
   if (activeSeverity) caseRows = caseRows.filter((r) => r.severityLevel === activeSeverity);
   const showCases = activeChannel !== null || activeSeverity !== null;
 
+  // 03: real measures recorded in the sheet (fallback to the standard guideline when empty)
+  const pickFixes = (pick: (r: System5Row) => string) => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const r of [...rows].reverse()) {
+      const t = (pick(r) || '').trim();
+      if (t && t !== '-' && !seen.has(t)) {
+        seen.add(t);
+        out.push(r.issue ? `${t}  (เคส: ${r.issue})` : t);
+      }
+      if (out.length >= 4) break;
+    }
+    return out;
+  };
+  const sheetShort = pickFixes((r) => r.shortTermFix);
+  const sheetLong = pickFixes((r) => r.longTermFix);
+  const shortItems = sheetShort.length ? sheetShort : SHORT_TERM;
+  const longItems = sheetLong.length ? sheetLong : LONG_TERM;
+
+  // 04: how many cases reached each step of the loop
+  const cycleCounts = [
+    total,
+    rows.filter((r) => (r.rootCause || '').trim()).length,
+    rows.filter((r) => (r.shortTermFix || '').trim() || (r.longTermFix || '').trim()).length,
+    complete,
+  ];
+
+  // 05: case list (always shown; filtered by clicking sections 01 / 02)
+  const listRows = caseRows;
+
   const leads = uniqueNames(rows, (r) => r.leadSupervisor);
   const monitors = uniqueNames(rows, (r) => r.responsible);
 
@@ -376,77 +406,27 @@ export const System5InfographicPoster: React.FC<System5InfographicPosterProps> =
             </div>
           </section>
 
-          {/* DRILL-DOWN CASE LIST */}
-          {showCases && (
-            <section className="bg-white rounded-xl border border-[#d6e9e1] p-4 no-print">
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <div className="text-[13px] font-bold">
-                  เคสที่ตรงเงื่อนไข{' '}
-                  <span className="text-[#0d6b56]">
-                    {[activeChannel && CHANNELS.find((c) => c.key === activeChannel)!.title, activeSeverity && `ระดับ ${activeSeverity}`]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </span>{' '}
-                  <span className="text-[#6b8a81] font-normal">({caseRows.length} เคส)</span>
-                </div>
-                <button
-                  onClick={() => {
-                    setActiveChannel(null);
-                    setActiveSeverity(null);
-                  }}
-                  className="text-[11px] text-[#5b766e] hover:text-[#0b5d4b] flex items-center gap-1 cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" /> ล้างตัวกรอง
-                </button>
-              </div>
-              {caseRows.length === 0 ? (
-                <div className="text-[12px] text-[#6b8a81] py-3 text-center">ไม่มีเคสในช่วงเวลานี้</div>
-              ) : (
-                <div className="divide-y divide-[#e8f2ee] max-h-72 overflow-y-auto">
-                  {caseRows.slice(0, 40).map((r, i) => {
-                    const sev = SEVERITY.find((s) => s.key === r.severityLevel);
-                    const done = (r.status || '').toLowerCase() === 'complete';
-                    return (
-                      <div key={i} className="py-2.5 grid grid-cols-[auto_1fr_auto] gap-3 items-start text-[12px]">
-                        <span className={`mt-1.5 w-2 h-2 rounded-full ${sev?.tone.dot || 'bg-slate-400'}`} />
-                        <div>
-                          <div className="font-medium text-[#12332b]">{r.issue || '—'}</div>
-                          <div className="text-[11px] text-[#6b8a81]">
-                            {r.date} · {r.targetDept || r.department}
-                            {r.rootCause ? ` · สาเหตุ: ${r.rootCause}` : ''}
-                          </div>
-                        </div>
-                        <span
-                          className={`text-[10.5px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${
-                            done ? 'bg-[#e3f1ec] text-[#0b5d4b]' : 'bg-[#fbf1dc] text-[#9a6a10]'
-                          }`}
-                        >
-                          {r.status || '—'}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-          )}
-
           {/* TWO-TIER STRATEGY */}
           <section>
-            <SectionTitle no="03" title="ยุทธศาสตร์แก้ไขปัญหา 2 มิติ" en="Two-Tier Solution Strategy" />
+            <SectionTitle
+              no="03"
+              title="ยุทธศาสตร์แก้ไขปัญหา 2 มิติ"
+              en="Two-Tier Solution Strategy"
+              hint={sheetShort.length || sheetLong.length ? 'มาตรการจริงจาก Google Sheet' : 'ยังไม่มีมาตรการในชีท · แสดงแนวทางมาตรฐาน'}
+            />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <StrategyCard
                 icon={Zap}
                 title="ระยะสั้น · Quick Wins"
                 sub="เห็นผลเร็ว แก้ปัญหาหน้างานทันที"
-                items={SHORT_TERM}
+                items={shortItems}
                 accent="amber"
               />
               <StrategyCard
                 icon={BrainCircuit}
                 title="ระยะยาว · Predictive & Sustainable"
                 sub="ป้องกันเชิงระบบ ขับเคลื่อนด้วยข้อมูล"
-                items={LONG_TERM}
+                items={longItems}
                 accent="emerald"
               />
             </div>
@@ -466,7 +446,10 @@ export const System5InfographicPoster: React.FC<System5InfographicPosterProps> =
                         <span className="text-[22px] font-bold opacity-90 leading-none">{c.no}</span>
                         <Icon className="w-5 h-5 opacity-90" />
                       </div>
-                      <div className="font-bold text-[13.5px] mt-2 leading-tight">{c.title}</div>
+                      <div className="mt-1.5 inline-block rounded-md bg-black/20 px-2 py-0.5 text-[11px] font-semibold">
+                        {cycleCounts[i]} / {total} เคส
+                      </div>
+                      <div className="font-bold text-[13.5px] mt-1.5 leading-tight">{c.title}</div>
                       <div className="text-[11.5px] opacity-90">{c.th}</div>
                       <ul className="mt-2 space-y-0.5 text-[11px] opacity-95">
                         {c.items.map((t) => (
@@ -483,6 +466,106 @@ export const System5InfographicPoster: React.FC<System5InfographicPosterProps> =
             </div>
             <div className="mt-2 text-[11px] text-[#5b766e] flex items-center gap-1.5">
               <RefreshCcw className="w-3.5 h-3.5" /> ผลการทบทวน (ขั้นที่ 4) ป้อนกลับเข้าสู่การเฝ้าระวัง (ขั้นที่ 1) อย่างต่อเนื่อง
+            </div>
+          </section>
+
+          {/* 05: CASE LIST LINKED TO SECTIONS 01–04 */}
+          <section>
+            <SectionTitle
+              no="05"
+              title="เคสเสียงลูกค้าจาก Google Sheet"
+              en="VOC Case Log"
+              hint="แต่ละเคสบอกว่าอยู่ในข้อ 01–04 ไหน · คลิกการ์ดข้อ 01/02 เพื่อกรอง"
+            />
+            <div className="bg-white rounded-xl border border-[#d6e9e1] p-4">
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="text-[12.5px] font-bold">
+                  {showCases ? 'เคสที่ตรงเงื่อนไข ' : 'เคสทั้งหมดในช่วงนี้ '}
+                  {showCases && (
+                    <span className="text-[#0d6b56]">
+                      {[activeChannel && CHANNELS.find((c) => c.key === activeChannel)!.title, activeSeverity && `ระดับ ${activeSeverity}`]
+                        .filter(Boolean)
+                        .join(' · ')}{' '}
+                    </span>
+                  )}
+                  <span className="text-[#6b8a81] font-normal">({listRows.length} เคส)</span>
+                </div>
+                {showCases && (
+                  <button
+                    onClick={() => {
+                      setActiveChannel(null);
+                      setActiveSeverity(null);
+                    }}
+                    className="no-print text-[11px] text-[#5b766e] hover:text-[#0b5d4b] flex items-center gap-1 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" /> ล้างตัวกรอง
+                  </button>
+                )}
+              </div>
+              {listRows.length === 0 ? (
+                <div className="text-[12px] text-[#6b8a81] py-3 text-center">ไม่มีเคสในช่วงเวลานี้</div>
+              ) : (
+                <div className="divide-y divide-[#e8f2ee] max-h-96 overflow-y-auto pf-unclip">
+                  {listRows.slice(0, 40).map((r, i) => {
+                    const sev = SEVERITY.find((x) => x.key === r.severityLevel);
+                    const done = (r.status || '').toLowerCase() === 'complete';
+                    const chans = CHANNELS.filter((c) => c.test(r)).map((c) => c.title);
+                    const step = done
+                      ? '4 Review'
+                      : (r.shortTermFix || '').trim() || (r.longTermFix || '').trim()
+                      ? '3 Implement'
+                      : (r.rootCause || '').trim()
+                      ? '2 Analyze'
+                      : '1 Monitor';
+                    return (
+                      <div key={i} className={`py-2.5 text-[12px] ${i >= 5 ? 'pf-print-hide' : ''}`}>
+                        <div className="grid grid-cols-[auto_1fr_auto] gap-3 items-start">
+                          <span className={`mt-1.5 w-2 h-2 rounded-full ${sev?.tone.dot || 'bg-slate-400'}`} />
+                          <div>
+                            <div className="font-medium text-[#12332b]">{r.issue || '—'}</div>
+                            <div className="text-[11px] text-[#6b8a81]">
+                              {r.date} · {r.targetDept || r.department}
+                              {r.rootCause ? ` · สาเหตุ: ${r.rootCause}` : ''}
+                            </div>
+                          </div>
+                          <span
+                            className={`text-[10.5px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap ${
+                              done ? 'bg-[#e3f1ec] text-[#0b5d4b]' : 'bg-[#fbf1dc] text-[#9a6a10]'
+                            }`}
+                          >
+                            {r.status || '—'}
+                          </span>
+                        </div>
+                        <div className="mt-1.5 ml-5 flex flex-wrap gap-1.5 text-[10.5px]">
+                          <span className="px-2 py-0.5 rounded-md bg-[#e3f1ec] text-[#0b5d4b] border border-[#bfe0d4]">
+                            01 ช่องทาง: <strong>{chans.length ? chans.join(', ') : 'ไม่ระบุ'}</strong>
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-md border border-[#e5d6b3] ${sev ? sev.tone.soft : 'bg-slate-100'} ${sev ? sev.tone.text : 'text-slate-600'}`}>
+                            02 ระดับ: <strong>{r.severityLevel}</strong>
+                            {sev ? ` · แก้ภายใน ${sev.fix} ${sev.fixUnit}` : ''}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-[#fbf1dc] text-[#9a6a10] border border-[#ecd9a8]">
+                            03 มาตรการ:{' '}
+                            <strong>
+                              {[(r.shortTermFix || '').trim() && 'ระยะสั้น', (r.longTermFix || '').trim() && 'ระยะยาว']
+                                .filter(Boolean)
+                                .join(' + ') || 'ยังไม่บันทึก'}
+                            </strong>
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-[#eef2f1] text-[#35554c] border border-[#d6e1dd]">
+                            04 ขั้นที่: <strong>{step}</strong>
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {listRows.length > 5 && (
+                    <p className="pf-print-show text-[11px] text-[#6b8a81] text-center pt-2">
+                      … และอีก {listRows.length - 5} เคส (ดูทั้งหมดได้บนแดชบอร์ด)
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </section>
 
