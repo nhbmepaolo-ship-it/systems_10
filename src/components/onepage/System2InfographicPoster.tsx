@@ -37,6 +37,51 @@ import {
   sortDatesChronologically,
 } from '../../utils/dateUtils';
 
+// ---------------------------------------------------------------------------
+// Link each daily record to the 4 poster sections (①–④) so the One-Page reads as one story
+// ---------------------------------------------------------------------------
+type CommTypeKey = 'incident' | 'pm' | 'resource' | 'support' | 'general';
+type SlaKey = 'critical' | 'high' | 'medium';
+
+const COMM_TYPE_LABEL: Record<CommTypeKey, string> = {
+  incident: 'Incident Reporting',
+  pm: 'Preventive Maintenance',
+  resource: 'Resource Requests',
+  support: 'Technical Support',
+  general: 'สื่อสารทั่วไป',
+};
+
+const SLA_LABEL: Record<SlaKey, string> = {
+  critical: 'CRITICAL (ภายใน 24 ชม.)',
+  high: 'HIGH (< 4 ชม. / Morning Talk)',
+  medium: 'MEDIUM (< 24 ชม. / ทบทวน 1 เดือน)',
+};
+
+function classifyCommType(r: System2Row): CommTypeKey {
+  if (r.isUrgent) return 'incident';
+  const text = `${r.commType} ${r.content}`.toLowerCase();
+  if (/pm\b|preventive|บำรุง|สอบเทียบ|calibrat|ตรวจเช็ค|ตรวจสอบสภาพ/.test(text)) return 'pm';
+  if (/อะไหล่|ยืม|คืน|เบิก|จัดซื้อ|ทรัพยากร|คลัง|ทดแทน|resource/.test(text)) return 'resource';
+  if (/ซ่อม|แก้ไข|ขัดข้อง|เสีย|vendor|software|ระบบ|support|เทคนิค|ติดตั้ง/.test(text)) return 'support';
+  return 'general';
+}
+
+function classifySla(r: System2Row): SlaKey {
+  if (r.isUrgent) return 'critical';
+  if (r.channelMorning || r.freqDaily) return 'high';
+  return 'medium';
+}
+
+function channelNames(r: System2Row): string[] {
+  const out: string[] = [];
+  if (r.channelMorning) out.push('Morning Talk');
+  if (r.channelMSTeams) out.push('MS Teams');
+  if (r.channelLine) out.push('LINE');
+  if (r.channelVoice) out.push('เสียงตามสาย');
+  if (r.channelOther) out.push('Email/อื่นๆ');
+  return out;
+}
+
 interface System2InfographicPosterProps {
   data: DashboardDataset;
   selectedMonth: string;
@@ -88,6 +133,20 @@ export const System2InfographicPoster: React.FC<System2InfographicPosterProps> =
   const teamsCount = dateFiltered.filter((r) => r.channelMSTeams).length;
   const urgentCount = dateFiltered.filter((r) => r.isUrgent).length;
   const infoCount = dateFiltered.filter((r) => r.isInfo).length;
+  const typeCounts = dateFiltered.reduce(
+    (acc, r) => {
+      acc[classifyCommType(r)]++;
+      return acc;
+    },
+    { incident: 0, pm: 0, resource: 0, support: 0, general: 0 } as Record<CommTypeKey, number>
+  );
+  const slaCounts = dateFiltered.reduce(
+    (acc, r) => {
+      acc[classifySla(r)]++;
+      return acc;
+    },
+    { critical: 0, high: 0, medium: 0 } as Record<SlaKey, number>
+  );
 
   // Filter tasks based on interactive channel/search filters
   let displayedTasks = dateFiltered;
@@ -96,7 +155,9 @@ export const System2InfographicPoster: React.FC<System2InfographicPosterProps> =
   else if (activeChannelFilter === 'teams') displayedTasks = displayedTasks.filter((r) => r.channelMSTeams);
   else if (activeChannelFilter === 'urgent') displayedTasks = displayedTasks.filter((r) => r.isUrgent);
 
-  if (activeSlaFilter === 'critical') displayedTasks = displayedTasks.filter((r) => r.isUrgent);
+  if (activeSlaFilter) displayedTasks = displayedTasks.filter((r) => classifySla(r) === activeSlaFilter);
+  if (activeTypeFilter && activeTypeFilter !== 'incident')
+    displayedTasks = displayedTasks.filter((r) => classifyCommType(r) === activeTypeFilter);
 
   if (taskSearchQuery.trim()) {
     const q = taskSearchQuery.toLowerCase();
@@ -387,7 +448,7 @@ ${task.content}
               </div>
               <div>
                 <h2 className="text-base md:text-lg font-extrabold tracking-wide uppercase leading-tight">
-                  COMMUNICATION TYPES
+                  ① COMMUNICATION TYPES
                 </h2>
                 <span className="text-[10px] text-blue-200 font-medium">
                   ประเภทการสื่อสารหลัก 4 ด้าน
@@ -416,7 +477,7 @@ ${task.content}
                   <div className="flex items-center justify-between">
                     <span className="text-xs md:text-sm font-bold text-slate-900">Incident Reporting</span>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 font-semibold">
-                      🔴 {urgentCount} งานด่วน
+                      🔴 {typeCounts.incident} รายการ
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
@@ -443,7 +504,7 @@ ${task.content}
                       Preventive Maintenance Updates
                     </span>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-semibold">
-                      🟡 แผน PM
+                      🟡 {typeCounts.pm} รายการ
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
@@ -468,7 +529,7 @@ ${task.content}
                   <div className="flex items-center justify-between">
                     <span className="text-xs md:text-sm font-bold text-slate-900">Resource Requests</span>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
-                      🟢 ทรัพยากร
+                      🟢 {typeCounts.resource} รายการ
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
@@ -493,7 +554,7 @@ ${task.content}
                   <div className="flex items-center justify-between">
                     <span className="text-xs md:text-sm font-bold text-slate-900">Technical Support</span>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">
-                      🔵 ซัพพอร์ต
+                      🔵 {typeCounts.support} รายการ
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-600 mt-0.5 leading-snug">
@@ -515,7 +576,7 @@ ${task.content}
               </div>
               <div>
                 <h2 className="text-base md:text-lg font-extrabold tracking-wide uppercase leading-tight">
-                  COMMUNICATION CHANNELS
+                  ② COMMUNICATION CHANNELS
                 </h2>
                 <span className="text-[10px] text-teal-100 font-medium">
                   ช่องทางหลักการถ่ายทอดข้อมูล (4 ช่องทาง)
@@ -655,7 +716,7 @@ ${task.content}
               <div>
                 <h2 className="text-base md:text-lg font-extrabold tracking-wide uppercase leading-tight text-white flex items-center gap-2">
                   <ShieldAlert className="w-5 h-5 text-rose-400" />
-                  <span>SLA PRIORITY & ESCALATION</span>
+                  <span>③ SLA PRIORITY & ESCALATION</span>
                 </h2>
                 <span className="text-[10px] text-slate-400 font-medium">
                   ระดับความสำคัญและการยกระดับการจัดการ
@@ -683,7 +744,7 @@ ${task.content}
                   </div>
                   <div>
                     <div className="font-black text-xs md:text-sm tracking-wider uppercase">
-                      CRITICAL
+                      CRITICAL · {slaCounts.critical} รายการ
                     </div>
                     <div className="text-[10.5px] text-white/90 font-medium">
                       (Immediate Action / ภายใน 24 ชม.)
@@ -708,7 +769,7 @@ ${task.content}
                   </div>
                   <div>
                     <div className="font-black text-xs md:text-sm tracking-wider uppercase">
-                      HIGH
+                      HIGH · {slaCounts.high} รายการ
                     </div>
                     <div className="text-[10.5px] text-white/90 font-medium">
                       (Response &lt; 4 Hrs / Morning Talk)
@@ -733,7 +794,7 @@ ${task.content}
                   </div>
                   <div>
                     <div className="font-black text-xs md:text-sm tracking-wider uppercase">
-                      MEDIUM
+                      MEDIUM · {slaCounts.medium} รายการ
                     </div>
                     <div className="text-[10.5px] text-white/90 font-medium">
                       (Response &lt; 24 Hrs / ทบทวน 1 เดือน)
@@ -762,7 +823,7 @@ ${task.content}
               <div>
                 <h2 className="text-base md:text-lg font-extrabold tracking-wide uppercase leading-tight text-white flex items-center gap-2">
                   <TrendingUp className="w-5 h-5 text-amber-400" />
-                  <span>KEY PERFORMANCE INDICATORS</span>
+                  <span>④ KEY PERFORMANCE INDICATORS</span>
                 </h2>
                 <span className="text-[10px] text-slate-400 font-medium">
                   ตัวชี้วัดความสำเร็จการรับทราบข้อมูล (UQC Standards)
@@ -907,6 +968,9 @@ ${task.content}
                   พบทั้งหมด {displayedTasks.length} รายการ
                 </span>
               </p>
+              <p className="text-[10.5px] text-slate-400 mt-0.5">
+                แต่ละรายการมีป้าย ①–④ บอกว่าถูกนับรวมอยู่ในกล่องไหนของ One-Page ด้านบน · คลิกกล่อง ① หรือ ③ เพื่อกรองรายการได้
+              </p>
             </div>
 
             {/* Quick Channel & Filter Pills */}
@@ -1039,6 +1103,38 @@ ${task.content}
                         </span>
                       </div>
                     </div>
+
+                    {/* Where this record is counted on the poster (①–④) */}
+                    {(() => {
+                      const typeKey = classifyCommType(task);
+                      const slaKey = classifySla(task);
+                      const chans = channelNames(task);
+                      return (
+                        <div className="flex flex-wrap items-center gap-1.5 text-[10.5px]">
+                          <span className="text-slate-400 font-semibold mr-0.5">นับรวมอยู่ใน:</span>
+                          <span className="px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-200 border border-blue-500/40">
+                            ① ประเภท: <strong>{COMM_TYPE_LABEL[typeKey]}</strong>
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-teal-500/15 text-teal-200 border border-teal-500/40">
+                            ② ช่องทาง: <strong>{chans.length ? chans.join(', ') : 'ไม่ระบุ'}</strong>
+                          </span>
+                          <span
+                            className={`px-2 py-0.5 rounded-md border ${
+                              slaKey === 'critical'
+                                ? 'bg-rose-500/15 text-rose-200 border-rose-500/40'
+                                : slaKey === 'high'
+                                ? 'bg-amber-500/15 text-amber-200 border-amber-500/40'
+                                : 'bg-indigo-500/15 text-indigo-200 border-indigo-500/40'
+                            }`}
+                          >
+                            ③ SLA: <strong>{SLA_LABEL[slaKey]}</strong>
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-200 border border-amber-500/30">
+                            ④ KPI รับทราบ: <strong>{task.ackRatePercent}%</strong>
+                          </span>
+                        </div>
+                      );
+                    })()}
 
                     {/* Main Content Box (The exact work done / details) */}
                     <div className="bg-slate-900/90 rounded-lg p-3.5 border border-slate-800 space-y-2">
