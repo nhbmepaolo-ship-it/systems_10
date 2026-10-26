@@ -7,7 +7,11 @@ import {
   Users,
   CheckCircle,
   Sparkles,
+  ImageDown,
+  Printer,
+  Loader2,
 } from 'lucide-react';
+import { exportVisibleReportAsPng } from '../exportPng';
 import { DashboardDataset } from '../types/dashboard';
 import { OnePageAllSystems } from './onepage/OnePageAllSystems';
 import { OnePageSystem2 } from './onepage/OnePageSystem2';
@@ -37,6 +41,28 @@ export const OnePageExecutiveView: React.FC<OnePageExecutiveViewProps> = ({
   const [activeSystemView, setActiveSystemView] = useState<'all' | 'sys2' | 'sys5' | 'sys8' | 'sys9'>(
     initialSystemView
   );
+
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const exportLabels: Record<typeof activeSystemView, string> = {
+    all: 'รวมทุกระบบ',
+    sys2: 'ระบบที่2',
+    sys5: 'ระบบที่5',
+    sys8: 'ระบบที่8',
+    sys9: 'ระบบที่9',
+  };
+  const handleExportPng = async () => {
+    setIsExporting(true);
+    setExportError(null);
+    try {
+      await exportVisibleReportAsPng(exportLabels[activeSystemView]);
+    } catch (err: any) {
+      console.error('PNG export failed:', err);
+      setExportError('Export PNG ไม่สำเร็จ ลองใหม่อีกครั้ง');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   React.useEffect(() => {
     if (initialSystemView) {
@@ -102,9 +128,26 @@ export const OnePageExecutiveView: React.FC<OnePageExecutiveViewProps> = ({
               เลือกรูปแบบรายงาน One-Page (Executive One-Page Switcher)
             </span>
           </div>
-          <span className="text-[11px] text-slate-400 font-mono">
-            แสดง One-Page รวม หรือ แยกเฉพาะเจาะจงแต่ละระบบได้ตามต้องการ
-          </span>
+          <div className="flex items-center gap-2">
+            {exportError && <span className="text-[11px] text-rose-400">{exportError}</span>}
+            <button
+              onClick={handleExportPng}
+              disabled={isExporting}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-60 text-white text-xs font-bold transition cursor-pointer"
+              title="บันทึก One-Page ที่แสดงอยู่เป็นไฟล์รูปภาพ .png"
+            >
+              {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageDown className="w-3.5 h-3.5" />}
+              <span>{isExporting ? 'กำลังสร้างรูป…' : 'Export PNG'}</span>
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 text-xs font-bold transition cursor-pointer"
+              title="พิมพ์ / บันทึก PDF ขนาด A4 หน้าเดียว"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>พิมพ์ A4</span>
+            </button>
+          </div>
         </div>
 
         {/* System Buttons */}
